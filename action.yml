@@ -1,0 +1,58 @@
+name: "Create merged Ressource Pack"
+description: "Downloads the given ressourcepacks from a file and merges them into a single one"
+
+inputs:
+  rp_deps:
+    description: "The File to read the ressourcepacks from"
+    default: "./rp_deps.txt"
+    required: false
+  pack_name:
+    description: "The name of the output ressourcepack"
+    required: true
+    
+runs:
+  using: "composite"
+  steps:
+      - name: Check if the ressourcepack list exists
+        shell: bash
+        run: | 
+          if [ ! -f "${{inputs.rp_deps}}"]; then
+            echo ${{inputs.rp_deps}} does not exist!
+            exit 1
+          fi
+          
+      - name: Download dependencies
+        shell: bash
+        run: |
+          mkdir packs
+          cd packs
+          wget -i ../${{inputs.rp_deps}}
+          mkdir merged
+          for x in *.zip ; do unzip -d merged -o -u $x ; done
+          cd ..
+          zip -r merged.zip packs/merged
+      
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+          
+          
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+          asset_path: ./merged.zip
+          asset_name: ${{inputs.pack_name}}.zip
+          asset_content_type: application/zip
+
+      
